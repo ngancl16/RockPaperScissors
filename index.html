@@ -1,3 +1,4 @@
+<!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
     <meta charset="UTF-8">
@@ -111,7 +112,7 @@
     <canvas id="canvas" class="hidden"></canvas>
 
     <script>
-        const apiKey = ""; // 執行環境提供
+        const apiKey = ""; // 請在此處填入您的 API Key
         const video = document.getElementById('video');
         const canvas = document.getElementById('canvas');
         const photoPreview = document.getElementById('photo-preview');
@@ -140,13 +141,21 @@
             } catch (err) {
                 console.error("Error accessing camera:", err);
                 errorOverlay.classList.remove('hidden');
-                errorMessage.textContent = "無法存取相機，請確保已開啟瀏覽器權限。";
+                errorMessage.textContent = "無法存取相機，請確保已開啟瀏覽器權限並使用 HTTPS 連線。";
             }
         }
 
         // 拍照並呼叫 API
         async function captureAndAnalyze() {
-            if (!stream) return;
+            if (!stream) {
+                alert("相機未就緒");
+                return;
+            }
+
+            if (!apiKey || apiKey === "") {
+                handleError("錯誤：未偵測到 API Key。請在程式碼中填入您的 Gemini API Key。");
+                return;
+            }
 
             // 1. 擷取畫面
             canvas.width = video.videoWidth;
@@ -192,19 +201,25 @@
                         })
                     });
 
-                    if (!response.ok) throw new Error("API 回應異常");
+                    if (response.status === 403) {
+                        throw new Error("API Key 無效或無權限存取。");
+                    }
+
+                    if (!response.ok) throw new Error(`API 錯誤: ${response.status}`);
 
                     const data = await response.json();
                     const resultText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+                    if (!resultText) throw new Error("AI 未能產生成果資料。");
+                    
                     const result = JSON.parse(resultText);
                     showResult(result);
                 } catch (err) {
-                    if (retries < maxRetries) {
+                    if (retries < maxRetries && !err.message.includes("API Key")) {
                         retries++;
                         const delay = Math.pow(2, retries) * 1000;
                         setTimeout(attempt, delay);
                     } else {
-                        handleError("辨識失敗，可能是網路不穩定。");
+                        handleError(`辨識失敗：${err.message}`);
                     }
                 }
             }
@@ -228,7 +243,6 @@
 
             // 設定圖示
             const iconEl = document.getElementById('result-icon');
-            const iconBg = document.getElementById('result-icon-bg');
             iconEl.className = 'fas text-4xl';
             
             if (gesture.includes('剪刀')) {
@@ -247,6 +261,8 @@
             statusLoading.classList.add('hidden');
             statusInitial.classList.remove('hidden');
             btnCapture.classList.remove('hidden');
+            video.classList.remove('hidden');
+            photoPreview.classList.add('hidden');
             alert(msg);
         }
 
@@ -258,11 +274,9 @@
             btnReset.classList.add('hidden');
             btnCapture.classList.remove('hidden');
             
-            // 確保影片播放
             if (video.paused) video.play().catch(() => {});
         }
 
-        // 初始化
         window.onload = startCamera;
     </script>
 </body>
